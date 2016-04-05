@@ -14,7 +14,7 @@ branches:
 # global environment variables
 environment:
   OPENCV_DIR: c:\dev\build\install
-  OCTAVE_HOME: c:\dev\octave-4.0.0
+  OCTAVE_HOME: c:\dev\octave-4.0.1
   # CMake generator, one of:
   # - MSYS Makefiles: make with SHELL=sh.exe
   # - MinGW Makefiles: mingw32-make with SHELL=cmd.exe
@@ -37,8 +37,8 @@ deploy: off
 
 # keep build artifacts, which can be downloaded later
 artifacts:
-  - path: build_mingw_x86.7z
-    name: binaries_cv310_x86_mingw
+  - path: cv310_x86_gcc493.7z
+    name: build_cv310_x86_mingw_gcc493_octave401
 
 # we dont need the entire git repo history
 # (this cause repository to be cloned as a zip archive using GitHub REST API)
@@ -47,6 +47,10 @@ shallow_clone: true
 install:
   # download and install dependencies
   - mkdir "c:\dev" && cd "c:\dev"
+  - echo Installing CMake...
+  - ps: Start-FileDownload "https://cmake.org/files/v3.4/cmake-3.4.3-win32-x86.zip" -FileName cmake-3.4.3-win32-x86.zip
+  - 7z x "c:\dev\cmake-3.4.3-win32-x86.zip" -o"c:\dev" -y > nul
+  - set "PATH=C:\dev\cmake-3.4.3-win32-x86\bin;%PATH%"
   - echo Installing GNU Make and Ninja...
   - ps: Start-FileDownload "ftp://ftp.equation.com/make/32/make.exe" -FileName mingw32-make.exe
   - ps: Start-FileDownload "https://github.com/ninja-build/ninja/releases/download/v1.6.0/ninja-win.zip" -FileName ninja-win.zip
@@ -58,8 +62,8 @@ install:
   - 7z x "c:\dev\opencv-3.1.0.zip" -o"c:\dev" -y > nul
   - 7z x "c:\dev\opencv_contrib-3.1.0.zip" -o"c:\dev" -y > nul
   - echo Installing Octave ...
-  - ps: Start-FileDownload "https://ftp.gnu.org/gnu/octave/windows/octave-4.0.0_0.zip" -FileName octave-4.0.0_0.zip
-  - 7z x "c:\dev\octave-4.0.0_0.zip" -o"c:\dev" -y > nul
+  - ps: Start-FileDownload "https://ftp.gnu.org/gnu/octave/windows/octave-4.0.1.zip" -FileName octave-4.0.1.zip
+  - 7z x "c:\dev\octave-4.0.1.zip" -o"c:\dev" -y > nul
   - set "PATH=%OCTAVE_HOME%\bin;%PATH%"
   - dir "c:\dev"
   # show info about build tools
@@ -73,7 +77,7 @@ install:
   - g++ --version
 
 before_build:
-  # OpenCV is built using GCC 4.9 compilers bundled with Octave
+  # OpenCV is built using GCC 4.9.3 compilers bundled with Octave 4.0.1
   #TODO: http://code.opencv.org/issues/3785
   #TODO: world and contrib do not mix well!
   - ps: |
@@ -82,6 +86,7 @@ before_build:
         #"-DCMAKE_COLOR_MAKEFILE:BOOL=OFF",
         "-DCMAKE_BUILD_TYPE:STRING=Release",
         "-DBUILD_DOCS:BOOL=OFF",
+        "-DBUILD_EXAMPLES:BOOL=OFF",
         "-DBUILD_PACKAGE:BOOL=OFF",
         "-DBUILD_PERF_TESTS:BOOL=OFF",
         "-DBUILD_TESTS:BOOL=OFF",
@@ -97,27 +102,29 @@ before_build:
         # core modules
         "-DBUILD_opencv_apps:BOOL=OFF",
         "-DBUILD_opencv_cuda:BOOL=OFF",
+        "-DBUILD_opencv_java:BOOL=OFF",
         "-DBUILD_opencv_python2:BOOL=OFF",
         "-DBUILD_opencv_python3:BOOL=OFF",
         "-DBUILD_opencv_ts:BOOL=OFF",
+        "-DBUILD_opencv_viz:BOOL=OFF",
         "-DBUILD_opencv_world:BOOL=OFF",
         # contrib modules
         "-DOPENCV_EXTRA_MODULES_PATH:PATH='c:\dev\opencv_contrib-3.1.0\modules'",
         "-DBUILD_opencv_contrib_world:BOOL=OFF",
         "-DBUILD_opencv_matlab:BOOL=OFF",
-        #TODO: disable some unused modules to reduce build time (avoid AppVeyor timeout)
+        #HACK: disable some unused modules to reduce build time (avoid AppVeyor timeout)
         "-DBUILD_opencv_aruco:BOOL=OFF",
         "-DBUILD_opencv_ccalib:BOOL=OFF",
         "-DBUILD_opencv_cvv:BOOL=OFF",
-        "-DBUILD_opencv_datasets:BOOL=OFF",
-        "-DBUILD_opencv_dnn:BOOL=OFF",
         "-DBUILD_opencv_hdf:BOOL=OFF",
         "-DBUILD_opencv_sfm:BOOL=OFF",
         "-DBUILD_opencv_structured_light:BOOL=OFF",
-        "-DBUILD_opencv_surface_matching:BOOL=OFF"
+        "-DBUILD_opencv_surface_matching:BOOL=OFF",
+        "-DBUILD_opencv_text:BOOL=OFF",
+        "-DBUILD_opencv_tracking:BOOL=OFF"
       )
       try {
-        # CMake doesnt like having sh.exe in path for "MinGW Makefiles"
+        #HACK: CMake doesnt like having sh.exe in path for "MinGW Makefiles"
         if ($env:CMAKE_GEN -match "MinGW") {
           ren "%OCTAVE_HOME%\bin\sh.exe" sh_.exe
           ren "C:\Program Files\Git\usr\bin\sh.exe" sh_.exe
@@ -128,7 +135,7 @@ before_build:
         &cmake -G "$env:CMAKE_GEN" -Wno-dev $options "c:\dev\opencv-3.1.0"
       }
       finally {
-        # restore sh.exe
+        #HACK: restore sh.exe
         if ($env:CMAKE_GEN -match "MinGW") {
           ren "%OCTAVE_HOME%\bin\sh_.exe" sh.exe
           ren "C:\Program Files\Git\usr\bin\sh_.exe" sh.exe
@@ -157,4 +164,4 @@ build_script:
 
 after_build:
   # package compiled OpenCV binaries (headers/libs/dlls)
-  - 7z a -t7z "%APPVEYOR_BUILD_FOLDER%\build_mingw_x86.7z" "%OPENCV_DIR%\" -y
+  - 7z a -t7z "%APPVEYOR_BUILD_FOLDER%\cv310_x86_gcc493.7z" "%OPENCV_DIR%\" -y
