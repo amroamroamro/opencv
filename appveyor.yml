@@ -14,7 +14,7 @@ branches:
 # global environment variables
 environment:
   OPENCV_DIR: c:\dev\build\install
-  OCTAVE_HOME: c:\dev\octave-4.0.1
+  OCTAVE_HOME: c:\dev\octave-4.0.3
   # CMake generator, one of:
   # - MSYS Makefiles: make with SHELL=sh.exe
   # - MinGW Makefiles: mingw32-make with SHELL=cmd.exe
@@ -38,7 +38,7 @@ deploy: off
 # keep build artifacts, which can be downloaded later
 artifacts:
   - path: cv310_x86_gcc493.7z
-    name: build_cv310_x86_mingw_gcc493_octave401
+    name: build_cv310_x86_mingw_gcc493_octave403
 
 # we dont need the entire git repo history
 # (this cause repository to be cloned as a zip archive using GitHub REST API)
@@ -62,8 +62,8 @@ install:
   - 7z x "c:\dev\opencv-3.1.0.zip" -o"c:\dev" -y > nul
   - 7z x "c:\dev\opencv_contrib-3.1.0.zip" -o"c:\dev" -y > nul
   - echo Installing Octave ...
-  - ps: Start-FileDownload "https://ftp.gnu.org/gnu/octave/windows/octave-4.0.1.zip" -FileName octave-4.0.1.zip
-  - 7z x "c:\dev\octave-4.0.1.zip" -o"c:\dev" -y > nul
+  - ps: Start-FileDownload "https://ftp.gnu.org/gnu/octave/windows/octave-4.0.3.zip" -FileName octave-4.0.3.zip
+  - 7z x "c:\dev\octave-4.0.3.zip" -o"c:\dev" -y > nul
   - set "PATH=%OCTAVE_HOME%\bin;%PATH%"
   - dir "c:\dev"
   # show info about build tools
@@ -77,7 +77,7 @@ install:
   - g++ --version
 
 before_build:
-  # OpenCV is built using GCC 4.9.3 compilers bundled with Octave 4.0.1
+  # OpenCV is built using GCC 4.9.3 compilers bundled with Octave 4.0.3
   #TODO: http://code.opencv.org/issues/3785
   #TODO: world and contrib do not mix well!
   - ps: |
@@ -119,9 +119,7 @@ before_build:
         "-DBUILD_opencv_hdf:BOOL=OFF",
         "-DBUILD_opencv_sfm:BOOL=OFF",
         "-DBUILD_opencv_structured_light:BOOL=OFF",
-        "-DBUILD_opencv_surface_matching:BOOL=OFF",
-        "-DBUILD_opencv_text:BOOL=OFF",
-        "-DBUILD_opencv_tracking:BOOL=OFF"
+        "-DBUILD_opencv_surface_matching:BOOL=OFF"
       )
       try {
         #HACK: CMake doesnt like having sh.exe in path for "MinGW Makefiles"
