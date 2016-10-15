@@ -52,7 +52,7 @@ install:
   - 7z x "c:\dev\cmake-3.4.3-win32-x86.zip" -o"c:\dev" -y > nul
   - set "PATH=C:\dev\cmake-3.4.3-win32-x86\bin;%PATH%"
   - echo Installing GNU Make and Ninja...
-  - ps: Start-FileDownload "ftp://ftp.equation.com/make/32/make.exe" -FileName mingw32-make.exe
+  - ps: Start-FileDownload "https://github.com/amroamroamro/opencv/releases/download/3.1.0/mingw32-make.exe" -FileName mingw32-make.exe
   - ps: Start-FileDownload "https://github.com/ninja-build/ninja/releases/download/v1.6.0/ninja-win.zip" -FileName ninja-win.zip
   - 7z x "c:\dev\ninja-win.zip" -o"c:\dev" -y > nul
   - set "PATH=c:\dev;%PATH%"
@@ -113,7 +113,6 @@ before_build:
         "-DBUILD_opencv_contrib_world:BOOL=OFF",
         "-DBUILD_opencv_matlab:BOOL=OFF",
         #HACK: disable some unused modules to reduce build time (avoid AppVeyor timeout)
-        "-DBUILD_opencv_aruco:BOOL=OFF",
         "-DBUILD_opencv_ccalib:BOOL=OFF",
         "-DBUILD_opencv_cvv:BOOL=OFF",
         "-DBUILD_opencv_hdf:BOOL=OFF",
