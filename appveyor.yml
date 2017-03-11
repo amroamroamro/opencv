@@ -1,0 +1,158 @@
+#
+# AppVeyor CI build script.
+# https://ci.appveyor.com/project/amroamroamro/opencv
+#
+
+# version format
+version: 3.2.0.{build}
+
+# whitelisted branches to build
+branches:
+  only:
+  - tag_3.2.0
+
+# global environment variables
+environment:
+  OPENCV_DIR: c:\dev\build\install
+  OCTAVE_HOME: c:\dev\octave-4.2.1
+  # CMake generator, one of:
+  # - MSYS Makefiles: make with SHELL=sh.exe
+  # - MinGW Makefiles: mingw32-make with SHELL=cmd.exe
+  # - Ninja: usually faster than GNU Make
+  CMAKE_GEN: Ninja
+  # Extra make arguments like number of parallel jobs (NPROC+1 is recommended).
+  # Note that GNU Make 3.81 bundled with Octave has poor parallel jobs support
+  # (make -jN freezes, make -j has no limit creating way too many processes!).
+  # So we download a newer GNU Make 4.2 for Windows (mingw32-make -jN works).
+  MAKE_EXTRA: -j2
+
+# immediately finish build if one of the jobs fails
+matrix:
+  fast_finish: true
+
+# disable automatic building/testing/deploying phases, we use custom scripts
+build: off
+test: off
+deploy: off
+
+# keep build artifacts, which can be downloaded later
+artifacts:
+  - path: cv320_x86_gcc494.7z
+    name: build_cv320_x86_mingw_gcc494_octave421
+
+# we dont need the entire git repo history
+# (this cause repository to be cloned as a zip archive using GitHub REST API)
+shallow_clone: true
+
+install:
+  # download and install dependencies
+  - mkdir "c:\dev" && cd "c:\dev"
+  - echo Installing GNU Make and Ninja...
+  - ps: Start-FileDownload "https://github.com/amroamroamro/opencv/releases/download/3.2.0/mingw32-make.exe" -FileName mingw32-make.exe
+  - ps: Start-FileDownload "https://github.com/ninja-build/ninja/releases/download/v1.7.2/ninja-win.zip" -FileName ninja-win.zip
+  - 7z x "c:\dev\ninja-win.zip" -o"c:\dev" -y > nul
+  - set "PATH=c:\dev;%PATH%"
+  - echo Downloading OpenCV ...
+  - ps: Start-FileDownload "https://github.com/Itseez/opencv/archive/3.2.0.zip" -FileName opencv-3.2.0.zip
+  - ps: Start-FileDownload "https://github.com/Itseez/opencv_contrib/archive/3.2.0.zip" -FileName opencv_contrib-3.2.0.zip
+  - 7z x "c:\dev\opencv-3.2.0.zip" -o"c:\dev" -y > nul
+  - 7z x "c:\dev\opencv_contrib-3.2.0.zip" -o"c:\dev" -y > nul
+  - echo Installing Octave ...
+  - ps: Start-FileDownload "https://ftp.gnu.org/gnu/octave/windows/octave-4.2.1-w32.zip" -FileName octave-4.2.1-w32.zip
+  - 7z x "c:\dev\octave-4.2.1-w32.zip" -o"c:\dev" -y > nul
+  - set "PATH=%OCTAVE_HOME%\bin;%PATH%"
+  - dir "c:\dev"
+  # show info about build tools
+  - set
+  - ver
+  - systeminfo
+  - cmake --version
+  - make --version
+  - mingw32-make --version
+  - ninja --version
+  - g++ --version
+
+before_build:
+  # Build OpenCV using GCC 4.9.4 compilers bundled with Octave 4.2.1
+  #TODO: world and contrib do not mix well!
+  - ps: |
+      # CMake call arguments
+      $options = @(
+        #"-DCMAKE_COLOR_MAKEFILE:BOOL=OFF",
+        "-DCMAKE_BUILD_TYPE:STRING=Release",
+        "-DBUILD_DOCS:BOOL=OFF",
+        "-DBUILD_EXAMPLES:BOOL=OFF",
+        "-DBUILD_PACKAGE:BOOL=OFF",
+        "-DBUILD_PERF_TESTS:BOOL=OFF",
+        "-DBUILD_TESTS:BOOL=OFF",
+        "-DWITH_1394:BOOL=OFF",
+        "-DWITH_CUDA:BOOL=OFF",
+        "-DWITH_CUFFT:BOOL=OFF",
+        "-DWITH_EIGEN:BOOL=OFF",
+        "-DWITH_IPP:BOOL=OFF",
+        "-DWITH_MATLAB:BOOL=OFF",
+        "-DWITH_OPENCL:BOOL=OFF",
+        "-DWITH_OPENCLAMDBLAS:BOOL=OFF",
+        "-DWITH_OPENCLAMDFFT:BOOL=OFF",
+        "-DWITH_VTK:BOOL=OFF",
+        # core modules
+        "-DBUILD_opencv_apps:BOOL=OFF",
+        "-DBUILD_opencv_cuda:BOOL=OFF",
+        "-DBUILD_opencv_java:BOOL=OFF",
+        "-DBUILD_opencv_python2:BOOL=OFF",
+        "-DBUILD_opencv_python3:BOOL=OFF",
+        "-DBUILD_opencv_ts:BOOL=OFF",
+        "-DBUILD_opencv_viz:BOOL=OFF",
+        "-DBUILD_opencv_world:BOOL=OFF",
+        # contrib modules
+        "-DOPENCV_ENABLE_NONFREE:BOOL=ON",
+        "-DOPENCV_EXTRA_MODULES_PATH:PATH='c:\dev\opencv_contrib-3.2.0\modules'",
+        "-DBUILD_opencv_contrib_world:BOOL=OFF",
+        "-DBUILD_opencv_matlab:BOOL=OFF",
+        #HACK: disable some unused modules to reduce build time (avoid AppVeyor timeout)
+        "-DBUILD_opencv_ccalib:BOOL=OFF",
+        "-DBUILD_opencv_cvv:BOOL=OFF",
+        "-DBUILD_opencv_hdf:BOOL=OFF",
+        "-DBUILD_opencv_sfm:BOOL=OFF",
+        "-DBUILD_opencv_structured_light:BOOL=OFF",
+        "-DBUILD_opencv_surface_matching:BOOL=OFF"
+      )
+      try {
+        #HACK: CMake doesnt like having sh.exe in path for "MinGW Makefiles"
+        if ($env:CMAKE_GEN -match "MinGW") {
+          ren "%OCTAVE_HOME%\bin\sh.exe" sh_.exe
+          ren "C:\Program Files\Git\usr\bin\sh.exe" sh_.exe
+        }
+        # configure
+        mkdir "c:\dev\build" | Out-Null
+        cd "c:\dev\build"
+        &cmake -G "$env:CMAKE_GEN" -Wno-dev $options "c:\dev\opencv-3.2.0"
+      }
+      finally {
+        #HACK: restore sh.exe
+        if ($env:CMAKE_GEN -match "MinGW") {
+          ren "%OCTAVE_HOME%\bin\sh_.exe" sh.exe
+          ren "C:\Program Files\Git\usr\bin\sh_.exe" sh.exe
+        }
+      }
+      # Note: cmake prints warning messages to stderr, so it is better to finish
+      # this PS block with a command that returns a success code just in case
+      echo "Done"
+
+build_script:
+  # build and install
+  - cd "c:\dev\build"
+  - cmake --build .
+  #- cmake --build . --config Release -- %MAKE_EXTRA%
+  #- call sh --login -c "cd /c/dev/build && mingw32-make $MAKE_EXTRA && make install"
+  - cmake --build . --target install
+  # copy a few extra files: pkgconfig file and MinGW C/C++ runtime dlls
+  - copy /y "c:\dev\build\unix-install\opencv.pc"   "%OPENCV_DIR%" > nul
+  - copy /y "c:\dev\build\version_string.tmp"       "%OPENCV_DIR%" > nul
+  - copy /y "%OCTAVE_HOME%\bin\libstdc++-6.dll"     "%OPENCV_DIR%\x86\mingw" > nul
+  - copy /y "%OCTAVE_HOME%\bin\libgcc_s_dw2-1.dll"  "%OPENCV_DIR%\x86\mingw" > nul
+  - copy /y "%OCTAVE_HOME%\bin\libwinpthread-1.dll" "%OPENCV_DIR%\x86\mingw" > nul
+
+after_build:
+  # package compiled OpenCV binaries (headers/libs/dlls)
+  - 7z a -t7z "%APPVEYOR_BUILD_FOLDER%\cv320_x86_gcc494.7z" "%OPENCV_DIR%\" -y
