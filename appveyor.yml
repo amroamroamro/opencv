@@ -22,6 +22,7 @@ deploy: off
 # build artifacts to keep
 artifacts:
   - path: cv330_x86_mingw.7z
+  - path: cv330_x64_mingw.7z
 
 # global environment variables
 environment:
@@ -32,14 +33,27 @@ environment:
   OPENCV_DIR: c:\dev\build\install
   OCTAVE_HOME: c:\dev\octave-4.2.1
 
+  # build matrix: jobs for both 32-bit and 64-bit
+  matrix:
+    - TARGET_ARCH: x86
+      OCTAVE_ZIP: octave-4.2.1-w32.zip
+      GCC_EH: dw2
+    - TARGET_ARCH: x64
+      OCTAVE_ZIP: octave-4.2.1-w64.zip
+      GCC_EH: seh
+
+# fail build immediately if one of the jobs failed
+matrix:
+  fast_finish: true
+
 install:
   # install dependencies (Make, Ninja, Octave)
   - mkdir "c:\dev" && cd "c:\dev"
   - ps: Start-FileDownload "https://github.com/amroamroamro/opencv/releases/download/3.2.0/mingw32-make.exe" -FileName mingw32-make.exe
   - ps: Start-FileDownload "https://github.com/ninja-build/ninja/releases/download/v1.7.2/ninja-win.zip" -FileName ninja-win.zip
-  - ps: Start-FileDownload "https://ftp.gnu.org/gnu/octave/windows/octave-4.2.1-w32.zip" -FileName octave-4.2.1-w32.zip
+  - ps: Start-FileDownload "https://ftp.gnu.org/gnu/octave/windows/$env:OCTAVE_ZIP" -FileName $env:OCTAVE_ZIP
   - 7z x "c:\dev\ninja-win.zip" -o"c:\dev" -y > nul
-  - 7z x "c:\dev\octave-4.2.1-w32.zip" -o"c:\dev" -y > nul
+  - 7z x "c:\dev\%OCTAVE_ZIP%" -o"c:\dev" -y > nul
   - set "PATH=%OCTAVE_HOME%\bin;c:\dev;%PATH%"
 
   # download OpenCV 3.3.0 sources (opencv + opencv_contrib)
@@ -111,12 +125,12 @@ build_script:
 
   # install
   - cmake --build . --target install
-  - copy /y "c:\dev\build\unix-install\opencv.pc"   "%OPENCV_DIR%" > nul
-  - copy /y "c:\dev\build\version_string.tmp"       "%OPENCV_DIR%" > nul
-  - copy /y "%OCTAVE_HOME%\bin\libstdc++-6.dll"     "%OPENCV_DIR%\x86\mingw" > nul
-  - copy /y "%OCTAVE_HOME%\bin\libgcc_s_dw2-1.dll"  "%OPENCV_DIR%\x86\mingw" > nul
-  - copy /y "%OCTAVE_HOME%\bin\libwinpthread-1.dll" "%OPENCV_DIR%\x86\mingw" > nul
+  - copy /y "c:\dev\build\unix-install\opencv.pc"       "%OPENCV_DIR%" > nul
+  - copy /y "c:\dev\build\version_string.tmp"           "%OPENCV_DIR%" > nul
+  - copy /y "%OCTAVE_HOME%\bin\libstdc++-6.dll"         "%OPENCV_DIR%\%TARGET_ARCH%\mingw" > nul
+  - copy /y "%OCTAVE_HOME%\bin\libgcc_s_%GCC_EH%-1.dll" "%OPENCV_DIR%\%TARGET_ARCH%\mingw" > nul
+  - copy /y "%OCTAVE_HOME%\bin\libwinpthread-1.dll"     "%OPENCV_DIR%\%TARGET_ARCH%\mingw" > nul
 
 after_build:
   # package binaries
-  - 7z a -t7z "%APPVEYOR_BUILD_FOLDER%\cv330_x86_mingw.7z" "%OPENCV_DIR%\" -y > nul
+  - 7z a -t7z "%APPVEYOR_BUILD_FOLDER%\cv330_%TARGET_ARCH%_mingw.7z" "%OPENCV_DIR%\" -y > nul
