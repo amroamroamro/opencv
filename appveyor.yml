@@ -63,6 +63,11 @@ install:
   - 7z x "c:\dev\opencv_contrib-3.3.0.zip" -o"c:\dev" -y > nul
 
 before_build:
+  # we manually apply a patch to fix a MinGW-related issue
+  - cd "c:\dev\opencv-3.3.0"
+  - ps: Start-FileDownload "https://gist.github.com/amroamroamro/a568eb73de00ef9b92f326778666df85/raw/21ee90d770a282ed934e6c549bf1ed46a0242197/mingw.patch" -FileName mingw.patch
+  - git apply mingw.patch
+
   # build OpenCV (using GCC 4.9 compilers bundled with Octave)
   #HACK: CMake complains if sh.exe is in PATH when using "MinGW Makefiles"
   - mkdir "c:\dev\build" && cd "c:\dev\build"
