@@ -1,0 +1,158 @@
+#
+# AppVeyor CI build script.
+# https://ci.appveyor.com/project/amroamroamro/opencv
+#
+
+# version format
+version: 3.4.0.{build}
+
+# cloned as a zip archive
+shallow_clone: true
+
+# whitelisted branches to build
+branches:
+  only:
+  - tag_3.4.0
+
+# disable automatic build/test/deploy phases
+build: off
+test: off
+deploy: off
+
+# build artifacts to keep
+artifacts:
+  - path: cv340_x86_mingw.7z
+  - path: cv340_x64_mingw.7z
+
+# global environment variables
+environment:
+  # OpenCV build options
+  # (CMake generators: "MSYS Makefiles", "MinGW Makefiles", "Ninja")
+  # (MSYS uses make in SHELL=sh.exe, MinGW uses mingw32-make in SHELL=cmd.exe)
+  CMAKE_GEN: Ninja
+  OPENCV_DIR: c:\dev\build\install
+  OCTAVE_HOME: c:\dev\octave-4.2.1
+
+  # build matrix: jobs for both 32-bit and 64-bit
+  matrix:
+    - TARGET_ARCH: x86
+      OCTAVE_ZIP: octave-4.2.1-w32.zip
+      GCC_EH: dw2
+    - TARGET_ARCH: x64
+      OCTAVE_ZIP: octave-4.2.1-w64.zip
+      GCC_EH: seh
+
+# fail build immediately if one of the jobs failed
+matrix:
+  fast_finish: true
+
+install:
+  # install dependencies (Make, Ninja, Octave)
+  - mkdir "c:\dev" && cd "c:\dev"
+  - ps: Start-FileDownload "https://github.com/amroamroamro/opencv/releases/download/3.2.0/mingw32-make.exe" -FileName mingw32-make.exe
+  - ps: Start-FileDownload "https://github.com/ninja-build/ninja/releases/download/v1.8.2/ninja-win.zip" -FileName ninja-win.zip
+  - ps: Start-FileDownload "https://ftp.gnu.org/gnu/octave/windows/$env:OCTAVE_ZIP" -FileName $env:OCTAVE_ZIP
+  - 7z x "c:\dev\ninja-win.zip" -o"c:\dev" -y > nul
+  - 7z x "c:\dev\%OCTAVE_ZIP%" -o"c:\dev" -y > nul
+  - set "PATH=%OCTAVE_HOME%\bin;c:\dev;%PATH%"
+
+  # download OpenCV 3.4.0 sources (opencv + opencv_contrib)
+  - ps: Start-FileDownload "https://github.com/opencv/opencv/archive/3.4.0.zip" -FileName opencv-3.4.0.zip
+  - ps: Start-FileDownload "https://github.com/opencv/opencv_contrib/archive/3.4.0.zip" -FileName opencv_contrib-3.4.0.zip
+  - 7z x "c:\dev\opencv-3.4.0.zip" -o"c:\dev" -y > nul
+  - 7z x "c:\dev\opencv_contrib-3.4.0.zip" -o"c:\dev" -y > nul
+
+before_build:
+  # we manually apply a patch to fix some MinGW-related issues
+  - cd "c:\dev\opencv-3.4.0"
+  - ps: Start-FileDownload "https://gist.github.com/amroamroamro/de4ac4155f35451ebc6300f87cec1f06/raw/a601f191592793134a0f21f3eba31c86fd401bbf/mingw.patch" -FileName mingw.patch
+  - git apply mingw.patch
+
+  # build OpenCV (using GCC 4.9 compilers bundled with Octave)
+  #HACK: CMake complains if sh.exe is in PATH when using "MinGW Makefiles"
+  - mkdir "c:\dev\build" && cd "c:\dev\build"
+  - ps: |
+      $options = @(
+        "-DBUILD_DOCS:BOOL=OFF",
+        "-DBUILD_EXAMPLES:BOOL=OFF",
+        "-DBUILD_PACKAGE:BOOL=OFF",
+        "-DBUILD_PERF_TESTS:BOOL=OFF",
+        "-DBUILD_TESTS:BOOL=OFF",
+        "-DBUILD_WITH_DEBUG_INFO:BOOL=OFF",
+        "-DBUILD_ITT:BOOL=OFF",
+        "-DBUILD_JAVA:BOOL=OFF",
+        "-DCV_TRACE:BOOL=OFF",
+        "-DENABLE_PYLINT:BOOL=OFF",
+        #"-DENABLE_CXX11:BOOL=ON",
+        "-DWITH_CUDA:BOOL=OFF",
+        "-DWITH_CUBLAS:BOOL=OFF",
+        "-DWITH_CUFFT:BOOL=OFF",
+        "-DWITH_NVCUVID:BOOL=OFF",
+        "-DWITH_IPP:BOOL=OFF",
+        "-DWITH_ITT:BOOL=OFF",
+        "-DWITH_MATLAB:BOOL=OFF",
+        "-DWITH_OPENCL:BOOL=OFF",
+        "-DWITH_VTK:BOOL=OFF",
+        "-DBUILD_opencv_apps:BOOL=OFF",
+        "-DBUILD_opencv_cudaarithm:BOOL=OFF",
+        "-DBUILD_opencv_cudabgsegm:BOOL=OFF",
+        "-DBUILD_opencv_cudacodec:BOOL=OFF",
+        "-DBUILD_opencv_cudafeatures2d:BOOL=OFF",
+        "-DBUILD_opencv_cudafilters:BOOL=OFF",
+        "-DBUILD_opencv_cudaimgproc:BOOL=OFF",
+        "-DBUILD_opencv_cudalegacy:BOOL=OFF",
+        "-DBUILD_opencv_cudaobjdetect:BOOL=OFF",
+        "-DBUILD_opencv_cudaoptflow:BOOL=OFF",
+        "-DBUILD_opencv_cudastereo:BOOL=OFF",
+        "-DBUILD_opencv_cudawarping:BOOL=OFF",
+        "-DBUILD_opencv_cudev:BOOL=OFF",
+        "-DBUILD_opencv_java:BOOL=OFF",
+        "-DBUILD_opencv_js:BOOL=OFF",
+        "-DBUILD_opencv_python2:BOOL=OFF",
+        "-DBUILD_opencv_python3:BOOL=OFF",
+        "-DBUILD_opencv_python_bindings_generator:BOOL=OFF",
+        "-DBUILD_opencv_ts:BOOL=OFF",
+        "-DBUILD_opencv_viz:BOOL=OFF",
+        "-DBUILD_opencv_world:BOOL=OFF",
+        "-DBUILD_opencv_matlab:BOOL=OFF",
+        "-DBUILD_opencv_ccalib:BOOL=OFF",
+        "-DBUILD_opencv_cvv:BOOL=OFF",
+        "-DBUILD_opencv_hdf:BOOL=OFF",
+        "-DBUILD_opencv_sfm:BOOL=OFF",
+        "-DBUILD_opencv_structured_light:BOOL=OFF",
+        "-DBUILD_opencv_surface_matching:BOOL=OFF",
+        "-DCMAKE_BUILD_TYPE:STRING=Release",
+        "-DOPENCV_ENABLE_NONFREE:BOOL=ON",
+        "-DOPENCV_EXTRA_MODULES_PATH:PATH='c:\dev\opencv_contrib-3.4.0\modules'"
+      )
+      try {
+        if ($env:CMAKE_GEN -match "MinGW") {
+          ren "%OCTAVE_HOME%\bin\sh.exe" sh_.exe
+          ren "C:\Program Files\Git\usr\bin\sh.exe" sh_.exe
+        }
+        &cmake -G "$env:CMAKE_GEN" -Wno-dev $options "c:\dev\opencv-3.4.0"
+      }
+      finally {
+        if ($env:CMAKE_GEN -match "MinGW") {
+          ren "%OCTAVE_HOME%\bin\sh_.exe" sh.exe
+          ren "C:\Program Files\Git\usr\bin\sh_.exe" sh.exe
+        }
+      }
+      echo "Done"
+
+build_script:
+  # compile
+  - cd "c:\dev\build"
+  - cmake --build .
+
+  # install
+  - cmake --build . --target install
+  - copy /y "c:\dev\build\unix-install\opencv.pc"       "%OPENCV_DIR%" > nul
+  - copy /y "c:\dev\build\version_string.tmp"           "%OPENCV_DIR%" > nul
+  - copy /y "%OCTAVE_HOME%\bin\libstdc++-6.dll"         "%OPENCV_DIR%\%TARGET_ARCH%\mingw" > nul
+  - copy /y "%OCTAVE_HOME%\bin\libgcc_s_%GCC_EH%-1.dll" "%OPENCV_DIR%\%TARGET_ARCH%\mingw" > nul
+  - copy /y "%OCTAVE_HOME%\bin\libwinpthread-1.dll"     "%OPENCV_DIR%\%TARGET_ARCH%\mingw" > nul
+
+after_build:
+  # package binaries
+  - 7z a -t7z "%APPVEYOR_BUILD_FOLDER%\cv340_%TARGET_ARCH%_mingw.7z" "%OPENCV_DIR%\" -y > nul
